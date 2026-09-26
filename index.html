@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EMOM 36 — Force & Puissance</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --card: #0d0d0d;
+      --border: #222222;
+      --text: #ffffff;
+      --muted: #666666;
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.15);
+      --success: #22c55e;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand { font-weight: 900; font-size: 1rem; letter-spacing: 2px; }
+    .round-badge { font-size: 0.8rem; color: var(--muted); font-weight: 700; letter-spacing: 1px; }
+
+    .main-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 28px 20px;
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: var(--accent-glow);
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .exo-title { font-size: 2rem; font-weight: 900; line-height: 1.1; margin-bottom: 8px; }
+    .exo-reps { font-size: 1.1rem; color: var(--muted); font-weight: 600; margin-bottom: 24px; }
+
+    .min-timer {
+      font-size: 5.5rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      letter-spacing: -3px;
+      margin-bottom: 8px;
+    }
+
+    .total-timer { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+
+    .progress-bar-container {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 6px;
+      margin: 24px 0 16px 0;
+    }
+
+    .p-step { height: 4px; background: var(--border); border-radius: 2px; }
+    .p-step.active { background: var(--accent); }
+    .p-step.done { background: var(--success); }
+
+    .next-box {
+      background: #050505;
+      border: 1px solid #1a1a1a;
+      border-radius: 14px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+    }
+
+    .next-label { color: var(--muted); font-size: 0.65rem; font-weight: 800; letter-spacing: 1px; }
+
+    .controls { display: flex; gap: 12px; }
+
+    .btn {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 20px;
+      border-radius: 20px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      cursor: pointer;
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-icon { flex: 0 0 64px; font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">EMOM 36</div>
+    <div class="round-badge" id="roundBadge">TOUR 1 / 6</div>
+  </header>
+
+  <div class="main-card">
+    <span class="tag" id="exoTag">TIRAGE VERTICAL</span>
+    <h1 class="exo-title" id="exoTitle">Tractions</h1>
+    <div class="exo-reps" id="exoReps">3 à 5 reps (Explosif)</div>
+
+    <div class="timer-container">
+      <div class="min-timer" id="minTimer">01:00</div>
+      <div class="total-timer">Restant : <span id="totalTimer">36:00</span></div>
+    </div>
+
+    <div class="progress-bar-container" id="gridSteps">
+      <div class="p-step active"></div>
+      <div class="p-step"></div>
+      <div class="p-step"></div>
+      <div class="p-step"></div>
+      <div class="p-step"></div>
+      <div class="p-step"></div>
+    </div>
+
+    <div class="next-box">
+      <span class="next-label">SUIVANT</span>
+      <span id="nextExo" style="font-weight: 700;">Pompes / Dips</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-icon" id="soundBtn" onclick="toggleSound()">🔔</button>
+    <button class="btn btn-primary" id="startBtn" onclick="toggleTimer()">DÉMARRER</button>
+    <button class="btn btn-icon" id="resetBtn" onclick="resetTimer()">↺</button>
+  </div>
+
+  <script>
+    const workout = [
+      { tag: "TIRAGE VERTICAL", title: "Tractions", reps: "3 à 5 reps (Explosif)" },
+      { tag: "POUSSÉE HAUT", title: "Pompes / Dips", reps: "10 à 12 reps (Vitesse)" },
+      { tag: "PUISSANCE GLOBALE", title: "Clean & Jerk", reps: "6 à 8 reps (25 kg)" },
+      { tag: "GAINAGE PROFOND", title: "Rouleau Abdos", reps: "8 à 10 reps (Contrôle)" },
+      { tag: "TIRAGE BUSTE / TRACT.", title: "Rowing / Squat Saute", reps: "8 à 10 reps (25 kg)" },
+      { tag: "CHAÎNE POSTÉRIEURE", title: "Kettlebell Swings", reps: "12 à 15 reps (Extension)" }
+    ];
+
+    let currentSec = 0;
+    const totalSecMax = 36 * 60;
+    let timerId = null;
+    let soundEnabled = true;
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    function playBeep(freq = 600, duration = 0.1) {
+      if (!soundEnabled || !audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.frequency.value = freq;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('soundBtn').innerText = soundEnabled ? '🔔' : '🔕';
+    }
+
+    function updateUI() {
+      const minIndex = Math.floor(currentSec / 60);
+      const exoIndex = minIndex % 6;
+      const roundNum = Math.floor(minIndex / 6) + 1;
+
+      if (currentSec >= totalSecMax) {
+        clearInterval(timerId);
+        timerId = null;
+        document.getElementById('exoTitle').innerText = "TERMINÉ !";
+        document.getElementById('exoTag').innerText = "BRAVO";
+        document.getElementById('exoReps').innerText = "36 MIN COMPLÉTÉES";
+        document.getElementById('minTimer').innerText = "00:00";
+        document.getElementById('startBtn').innerText = "RECOMMENCER";
+        return;
+      }
+
+      const currentExo = workout[exoIndex];
+      const nextExo = workout[(exoIndex + 1) % 6];
+
+      document.getElementById('exoTag').innerText = currentExo.tag;
+      document.getElementById('exoTitle').innerText = currentExo.title;
+      document.getElementById('exoReps').innerText = currentExo.reps;
+      document.getElementById('nextExo').innerText = nextExo.title;
+      document.getElementById('roundBadge').innerText = `TOUR ${Math.min(roundNum, 6)} / 6`;
+
+      const secInMin = 60 - (currentSec % 60);
+      const displaySec = secInMin === 60 ? 0 : secInMin;
+      const displayMin = secInMin === 60 ? 1 : 0;
+      
+      document.getElementById('minTimer').innerText = 
+        `${String(displayMin).padStart(2, '0')}:${String(displaySec).padStart(2, '0')}`;
+
+      const remTotal = totalSecMax - currentSec;
+      const remM = Math.floor(remTotal / 60);
+      const remS = remTotal % 60;
+      document.getElementById('totalTimer').innerText = 
+        `${String(remM).padStart(2, '0')}:${String(remS).padStart(2, '0')}`;
+
+      const steps = document.querySelectorAll('.p-step');
+      steps.forEach((step, i) => {
+        step.className = 'p-step';
+        if (i < exoIndex) step.classList.add('done');
+        else if (i === exoIndex) step.classList.add('active');
+      });
+
+      if (secInMin <= 3 && secInMin > 0) playBeep(800, 0.15);
+      else if (secInMin === 60 && currentSec > 0) playBeep(1200, 0.3);
+    }
+
+    function toggleTimer() {
+      initAudio();
+      const btn = document.getElementById('startBtn');
+      if (timerId) {
+        clearInterval(timerId);
+        timerId = null;
+        btn.innerText = "REPRENDRE";
+        btn.classList.remove('btn-primary');
+      } else {
+        if (currentSec >= totalSecMax) currentSec = 0;
+        timerId = setInterval(() => {
+          currentSec++;
+          updateUI();
+        }, 1000);
+        btn.innerText = "PAUSE";
+        btn.classList.add('btn-primary');
+      }
+    }
+
+    function resetTimer() {
+      if (timerId) {
+        clearInterval(timerId);
+        timerId = null;
+      }
+      currentSec = 0;
+      document.getElementById('startBtn').innerText = "DÉMARRER";
+      document.getElementById('startBtn').classList.add('btn-primary');
+      updateUI();
+    }
+
+    updateUI();
+  </script>
+</body>
+</html>
