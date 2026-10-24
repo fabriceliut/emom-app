@@ -119,6 +119,8 @@
     .rc-list { list-style: none; display: grid; gap: 4px; counter-reset: ex; }
     .rc-list li { font-size: 12px; color: #d4d4d8; display: flex; justify-content: space-between; gap: 8px; }
     .rc-list li span:last-child { font-family: var(--mono); font-size: 11px; color: var(--muted-2); white-space: nowrap; }
+    .rc-list li.rc-block { margin-top: 6px; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-2); }
+    .rc-list li.rc-block:first-child { margin-top: 0; }
     .rc-last { font-size: 11px; color: var(--muted-2); border-top: 1px solid var(--border); padding-top: 10px; display: flex; justify-content: space-between; }
     .rc-last b { color: var(--accent-2); font-weight: 800; }
 
@@ -300,7 +302,7 @@
       <div class="round-bar">
         <div class="round-row">
           <div class="round-left">
-            <span class="chip">Progression</span>
+            <span class="chip" id="progressChip">Progression</span>
             <div id="roundBadge">TOUR <span>1</span> / 7</div>
           </div>
           <div class="total-time">
@@ -327,7 +329,7 @@
 
           <div class="minute">
             <div id="minuteTimerDisplay" class="text-glow">01:00</div>
-            <p class="label" style="margin-top:4px;">Décompte de la minute</p>
+            <p class="label" id="minuteLabel" style="margin-top:4px;">Décompte de la minute</p>
           </div>
 
           <div id="progressSteps"></div>
@@ -371,7 +373,7 @@
           <div id="summaryRealTime" class="v accent">00:00</div>
         </div>
         <div class="stat">
-          <div class="label">Tours</div>
+          <div class="label" id="summaryRoundsLabel">Tours</div>
           <div id="summaryRoundsDone" class="v">7</div>
         </div>
       </div>
@@ -393,6 +395,8 @@
 
   <script>
     // Routines : pour en ajouter une, copier un bloc et changer id / name / exercises.
+    // Format simple : `rounds` + `exercises` (fenêtres de 60 s).
+    // Format en blocs : `blocks: [{ title, rounds, stepSeconds, exercises }]`, enchaînés dans l'ordre.
     // Un exercice peut avoir des `variants` qui alternent à chaque tour (ex. jambe gauche / droite).
     // `id` sert au journal des reps : deux variantes avec le même id partagent le même historique.
     const ROUTINES = [
@@ -439,10 +443,44 @@
             ]
           }
         ]
+      },
+      {
+        id: "C",
+        name: "Option C",
+        title: "Complément capoeira",
+        description: "Tirage, jambes chargées et chaîne postérieure : ce que le yoga et la capoeira ne travaillent pas. Dernier tour de chaque exercice à 1-2 reps de l'échec.",
+        blocks: [
+          {
+            title: "Tirage + jambes",
+            rounds: 4,
+            stepSeconds: 90,
+            exercises: [
+              { id: "pullup-tempo", tag: "TIRAGE VERTICAL", name: "Tractions tempo", reps: "5-7 REPS", advice: "Descente en 3 s, bras tendus en bas. 7 reps à chaque tour : passe en tractions archer ou pause 2 s en haut." },
+              { id: "split-squat", tag: "FORCE UNILATÉRALE", name: "Squat bulgare (KB 16 kg)", reps: "8-12 / JAMBE", advice: "KB en goblet, les deux jambes dans la fenêtre. Descente en 2-3 s, genou avant stable." }
+            ]
+          },
+          {
+            title: "Charnière + tirage horizontal",
+            rounds: 4,
+            stepSeconds: 90,
+            exercises: [
+              { id: "sl-rdl", tag: "CHAÎNE POSTÉRIEURE", name: "SDT roumain 1 jambe (KB 16 kg)", reps: "8-10 / JAMBE", advice: "Dos neutre, la hanche recule, descente en 3 s. Les deux jambes dans la fenêtre." },
+              { id: "inverted-row", tag: "TIRAGE HORIZONTAL", name: "Rows inversés", reps: "8-12 REPS", advice: "Corps gainé, poitrine à la barre, pause 1 s en haut. Trop facile : pieds surélevés." }
+            ]
+          },
+          {
+            title: "Finisher",
+            rounds: 4,
+            stepSeconds: 60,
+            exercises: [
+              { id: "dips", tag: "POUSSÉE", name: "Dips", reps: "8-12 REPS", advice: "Descente contrôlée, épaules basses, extension complète." },
+              { id: "ab-wheel", tag: "GAINAGE PROFOND", name: "Roue abdos", reps: "8-10 REPS", advice: "Gainage contrôlé sans creuser le bas du dos." }
+            ]
+          }
+        ]
       }
     ];
 
-    const STEP_MS = 60000;
     const STORAGE = { session: "emom.session.v2", history: "emom.history.v2", sound: "emom.sound" };
 
     let routine = null;
@@ -458,27 +496,53 @@
       return ROUTINES.find(r => r.id === id) || null;
     }
 
+    function blocksOf(r) {
+      return r.blocks || [{ rounds: r.rounds, stepSeconds: 60, exercises: r.exercises }];
+    }
+
+    // Séance déroulée : une étape par fenêtre, avec ses variantes résolues
+    const stepsCache = new Map();
+    function stepsOf(r) {
+      if (!stepsCache.has(r.id)) {
+        const steps = [];
+        blocksOf(r).forEach((block, blockIndex) => {
+          for (let round = 0; round < block.rounds; round++) {
+            block.exercises.forEach((base, exIndex) => {
+              const variant = base.variants ? base.variants[round % base.variants.length] : {};
+              steps.push({ ...base, ...variant, number: exIndex + 1, block, blockIndex, round, exIndex, ms: (block.stepSeconds || 60) * 1000 });
+            });
+          }
+        });
+        stepsCache.set(r.id, steps);
+      }
+      return stepsCache.get(r.id);
+    }
+
     function totalSteps(r = routine) {
-      return r.rounds * r.exercises.length;
+      return stepsOf(r).length;
     }
 
     function totalMinutes(r = routine) {
-      return totalSteps(r) * STEP_MS / 60000;
+      return Math.round(stepsOf(r).reduce((sum, s) => sum + s.ms, 0) / 60000);
     }
 
     function exerciseAt(r, stepIndex) {
-      const exIndex = stepIndex % r.exercises.length;
-      const round = Math.floor(stepIndex / r.exercises.length);
-      const base = r.exercises[exIndex];
-      const variant = base.variants ? base.variants[round % base.variants.length] : {};
-      return { ...base, ...variant, number: exIndex + 1 };
+      return stepsOf(r)[stepIndex];
+    }
+
+    function currentStepMs() {
+      return exerciseAt(routine, Math.min(session.stepIndex, totalSteps() - 1)).ms;
+    }
+
+    function formatRoutineMeta(r) {
+      const blocks = blocksOf(r);
+      return blocks.length > 1 ? `${blocks.length} blocs · ${totalMinutes(r)} min` : `${r.rounds} tours · ${totalMinutes(r)} min`;
     }
 
     // Exercices à saisir dans le journal (une ligne par id)
     function loggedExercises(r) {
       const seen = new Map();
-      for (let i = 0; i < r.exercises.length * 2; i++) {
-        const ex = exerciseAt(r, i);
+      for (const ex of stepsOf(r)) {
         if (!seen.has(ex.id)) seen.set(ex.id, { id: ex.id, name: ex.logName || ex.name, reps: ex.reps });
       }
       return [...seen.values()];
@@ -710,8 +774,8 @@
       commitRun();
 
       let advanced = false;
-      while (session.stepElapsedMs >= STEP_MS) {
-        session.stepElapsedMs -= STEP_MS;
+      while (session.stepElapsedMs >= currentStepMs()) {
+        session.stepElapsedMs -= currentStepMs();
         session.stepIndex++;
         advanced = true;
         if (isFinished()) {
@@ -725,8 +789,8 @@
         playChangeTone();
       }
 
-      // Bips à 3, 2, 1 s de la fin de la minute
-      const secLeft = Math.ceil((STEP_MS - session.stepElapsedMs) / 1000);
+      // Bips à 3, 2, 1 s de la fin de la fenêtre
+      const secLeft = Math.ceil((currentStepMs() - session.stepElapsedMs) / 1000);
       if (secLeft >= 1 && secLeft <= 3 && secLeft !== lastBeepSec) {
         lastBeepSec = secLeft;
         playBeep(600, 0.1);
@@ -787,7 +851,11 @@
     function openSummary() {
       document.getElementById('summaryRoutineName').innerText = `${routine.name} · ${routine.title}`;
       document.getElementById('summaryRealTime').innerText = formatTime(Math.round(session.totalElapsedMs / 1000));
-      document.getElementById('summaryRoundsDone').innerText = `${routine.rounds} / ${routine.rounds}`;
+      const blocks = blocksOf(routine);
+      document.getElementById('summaryRoundsLabel').innerText = blocks.length > 1 ? 'Blocs' : 'Tours';
+      document.getElementById('summaryRoundsDone').innerText = blocks.length > 1
+        ? `${blocks.length} / ${blocks.length}`
+        : `${routine.rounds} / ${routine.rounds}`;
 
       const rows = document.getElementById('logRows');
       rows.innerHTML = '';
@@ -856,24 +924,31 @@
     function updateDisplay() {
       const steps = totalSteps();
       const stepIndex = Math.min(session.stepIndex, steps - 1);
+      const allSteps = stepsOf(routine);
+      const activeEx = exerciseAt(routine, stepIndex);
+      const blocks = blocksOf(routine);
 
-      // Temps max restant
-      const totalSecLeft = Math.max(0, Math.ceil((steps * STEP_MS - totalElapsedNow()) / 1000));
+      // Temps restant du plan
+      const remainingMs = allSteps.slice(stepIndex).reduce((sum, s) => sum + s.ms, 0) - stepElapsedNow();
+      const totalSecLeft = Math.max(0, Math.ceil(remainingMs / 1000));
       document.getElementById('totalTimerDisplay').innerText = formatTime(totalSecLeft);
       document.getElementById('overallFill').style.width = `${(session.stepIndex / steps) * 100}%`;
 
-      // Décompte de la minute
-      const secLeftInMin = Math.min(60, Math.max(0, Math.ceil((STEP_MS - stepElapsedNow()) / 1000)));
+      // Décompte de la fenêtre (60 s ou plus)
+      const stepSec = activeEx.ms / 1000;
+      const secLeftInStep = Math.min(stepSec, Math.max(0, Math.ceil((activeEx.ms - stepElapsedNow()) / 1000)));
       const minEl = document.getElementById('minuteTimerDisplay');
-      minEl.innerText = secLeftInMin === 60 ? "01:00" : `00:${String(secLeftInMin).padStart(2, '0')}`;
-      minEl.classList.toggle('warn', secLeftInMin <= 5 && secLeftInMin > 0);
+      minEl.innerText = formatTime(secLeftInStep);
+      minEl.classList.toggle('warn', secLeftInStep <= 5 && secLeftInStep > 0);
+      document.getElementById('minuteLabel').innerText =
+        stepSec === 60 ? "Décompte de la minute" : `Fenêtre de ${formatTime(stepSec)}`;
 
-      // Tour & exercice
-      const currentRound = Math.floor(stepIndex / routine.exercises.length) + 1;
+      // Bloc, tour & exercice
+      document.getElementById('progressChip').innerText =
+        blocks.length > 1 ? `Bloc ${activeEx.blockIndex + 1}/${blocks.length}` : "Progression";
       document.getElementById('roundBadge').innerHTML =
-        `TOUR <span>${currentRound}</span> / ${routine.rounds}`;
+        `TOUR <span>${activeEx.round + 1}</span> / ${activeEx.block.rounds}`;
 
-      const activeEx = exerciseAt(routine, stepIndex);
       document.getElementById('exoTag').innerText = activeEx.tag;
       document.getElementById('activeExTitle').innerText = `${activeEx.number}. ${activeEx.name}`;
       document.getElementById('activeExReps').innerText = activeEx.reps;
@@ -888,22 +963,23 @@
       const nextStepIdx = stepIndex + 1;
       if (nextStepIdx < steps) {
         const nextEx = exerciseAt(routine, nextStepIdx);
-        document.getElementById('nextExTitle').innerText = `${nextEx.number}. ${nextEx.name}`;
+        const nextPrefix = nextEx.blockIndex !== activeEx.blockIndex ? `Bloc ${nextEx.blockIndex + 1} · ` : '';
+        document.getElementById('nextExTitle').innerText = `${nextPrefix}${nextEx.number}. ${nextEx.name}`;
         document.getElementById('nextExReps').innerText = nextEx.reps;
       } else {
         document.getElementById('nextExTitle').innerText = "Dernière série !";
         document.getElementById('nextExReps').innerText = "🏁";
       }
 
-      renderSteps(stepIndex % routine.exercises.length);
+      renderSteps(activeEx.block.exercises.length, activeEx.exIndex);
     }
 
-    function renderSteps(activeIdx) {
+    function renderSteps(count, activeIdx) {
       const stepsContainer = document.getElementById('progressSteps');
-      stepsContainer.style.gridTemplateColumns = `repeat(${routine.exercises.length}, minmax(0, 1fr))`;
+      stepsContainer.style.gridTemplateColumns = `repeat(${count}, minmax(0, 1fr))`;
       stepsContainer.innerHTML = '';
 
-      for (let i = 0; i < routine.exercises.length; i++) {
+      for (let i = 0; i < count; i++) {
         const step = document.createElement('div');
         step.className = `step ${i < activeIdx ? 'done' : i === activeIdx ? 'active' : ''}`;
         stepsContainer.appendChild(step);
@@ -917,10 +993,11 @@
       banner.hidden = !saved;
       if (saved) {
         const r = findRoutine(saved.routineId);
-        const round = Math.floor(saved.stepIndex / r.exercises.length) + 1;
+        const step = exerciseAt(r, saved.stepIndex);
+        const multi = blocksOf(r).length > 1;
         document.getElementById('resumeName').innerText = `${r.name} · ${r.title}`;
         document.getElementById('resumeMeta').innerText =
-          `Tour ${round}/${r.rounds} · ${formatTime(Math.round(saved.totalElapsedMs / 1000))} écoulées`;
+          `${multi ? `Bloc ${step.blockIndex + 1} · ` : ''}Tour ${step.round + 1}/${step.block.rounds} · ${formatTime(Math.round(saved.totalElapsedMs / 1000))} écoulées`;
       }
 
       const list = document.getElementById('routineList');
@@ -931,13 +1008,19 @@
         card.onclick = () => selectRoutine(r.id);
 
         const last = lastSessionFor(r.id);
-        const items = r.exercises.map(ex =>
-          `<li><span>${ex.listName || ex.name}</span><span>${ex.reps}</span></li>`).join('');
+        const blocks = blocksOf(r);
+        const items = blocks.map((block, i) => {
+          const head = blocks.length > 1
+            ? `<li class="rc-block"><span>Bloc ${i + 1} · ${block.title}</span><span>${block.rounds} × ${formatTime(block.stepSeconds || 60)}</span></li>`
+            : '';
+          return head + block.exercises.map(ex =>
+            `<li><span>${ex.listName || ex.name}</span><span>${ex.reps}</span></li>`).join('');
+        }).join('');
 
         card.innerHTML = `
           <div class="rc-top">
             <span class="chip">${r.name}</span>
-            <span class="rc-meta">${r.rounds} tours · ${totalMinutes(r)} min</span>
+            <span class="rc-meta">${formatRoutineMeta(r)}</span>
           </div>
           <div>
             <div class="rc-name">${r.title}</div>
