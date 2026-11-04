@@ -1,4 +1,4 @@
-const CACHE = 'la-forge-v5';
+const CACHE = 'la-forge-v6';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', (event) => {
