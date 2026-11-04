@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="La Forge">
+  <rect width="64" height="64" rx="16" fill="#09090b"/>
+  <path d="M16 43h32M20 43v6h24v-6M23 20h18v7H23zM27 27v16M37 27v16M19 20l4-5h18l4 5" fill="none" stroke="#34d399" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="32" cy="12" r="3" fill="#fbbf24"/>
+</svg>
